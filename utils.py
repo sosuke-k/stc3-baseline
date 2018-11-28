@@ -35,16 +35,19 @@ def maybe_download(url: str, store_path: Path, filename: str, md5: str = None):
         try:
             logger.info("Downloading file {}...".format(url + "  " + filename))
             with TqdmUpTo(unit='B', unit_scale=True, miniters=1, desc=filename) as t:
-                local_filename, _ = urlretrieve(url, store_path / filename, reporthook=t.update_to)
+                local_filename, _ = urlretrieve(
+                    url, store_path / filename, reporthook=t.update_to)
         except AttributeError as e:
-            logger.error("An error occurred when downloading the file! Please get the dataset using a browser.")
+            logger.error(
+                "An error occurred when downloading the file! Please get the dataset using a browser.")
             raise e
 
         if md5:
             md5_download = file_md5(store_path / filename)
             if not md5 == md5_download:
                 store_path.joinpath(filename).unlink()
-                raise ValueError("MD5 checksum error, expected %s but got %s" % (md5, md5_download))
+                raise ValueError(
+                    "MD5 checksum error, expected %s but got %s" % (md5, md5_download))
 
     return store_path / filename
 

@@ -30,18 +30,22 @@ class Model(object):
         self.quality_labels = tf.placeholder(
             shape=(None, len(data.QUALITY_MEASURES), len(data.QUALITY_SCALES)),
             dtype=tf.float32, name="quality_labels")
-        self.dropout = tf.placeholder_with_default(params.dropout, shape=[], name="dropout_rate")
+        self.dropout = tf.placeholder_with_default(
+            params.dropout, shape=[], name="dropout_rate")
 
         with tf.device("/cpu:0"):
             self.embedding = tf.get_variable(shape=embedding.shape, trainable=params.update_embedding,
                                              name="embedding_weights", dtype=tf.float32)
             turns_embedded = tf.nn.embedding_lookup(self.embedding, self.turns)
-        turns_boW = tf.reduce_sum(turns_embedded, axis=2, name="BoW")  # Bag of Words
+        turns_boW = tf.reduce_sum(
+            turns_embedded, axis=2, name="BoW")  # Bag of Words
 
-        features = (turns_boW, self.senders, self.turn_lengths, self.dialogue_lengths)
+        features = (turns_boW, self.senders,
+                    self.turn_lengths, self.dialogue_lengths)
 
         if task == Task.nugget:
-            self.c_nuggets_logits, self.h_nuggets_logits = nugget_model_fn(features, self.dropout, params)
+            self.c_nuggets_logits, self.h_nuggets_logits = nugget_model_fn(
+                features, self.dropout, params)
             self.loss = nugget_loss(
                 self.c_nuggets_logits, self.h_nuggets_logits,
                 self.c_nuggets_labels, self.h_nuggets_labels, self.dialogue_lengths, tf.shape(self.turns)[1])
@@ -50,7 +54,8 @@ class Model(object):
                                tf.nn.softmax(self.h_nuggets_logits, axis=-1))
 
         elif task == Task.quality:
-            self.quality_logits = quality_model_fn(features, self.dropout, params)
+            self.quality_logits = quality_model_fn(
+                features, self.dropout, params)
             self.loss = quality_loss(self.quality_logits, self.quality_labels)
             self.prediction = (tf.nn.softmax(self.quality_logits, axis=-1))
 
@@ -61,24 +66,27 @@ class Model(object):
                                        lr=params.learning_rate, optimizer=params.optimizer)
 
         # embedding weights are not saved into Graph if it is not trainable
-        self.saver = tf.train.Saver(tf.trainable_variables(), save_relative_paths=True)
+        self.saver = tf.train.Saver(
+            tf.trainable_variables(), save_relative_paths=True)
 
-        self.run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE) if params.trace else tf.RunOptions()
+        self.run_options = tf.RunOptions(
+            trace_level=tf.RunOptions.FULL_TRACE) if params.trace else tf.RunOptions()
         self.run_metadata = tf.RunMetadata()
 
         self.session.run(tf.global_variables_initializer())
         # Variable init does not accept weights that are larger than 2GB
         # This must be ran after global_variables_initializer
-        self.session.run(self.embedding.initializer, feed_dict={self.embedding.initial_value: embedding})
+        self.session.run(self.embedding.initializer, feed_dict={
+                         self.embedding.initial_value: embedding})
 
         assert np.allclose(self.session.run(self.embedding), embedding)
 
-    def save_model(self, save_path: Path=None):
+    def save_model(self, save_path: Path = None):
         save_path.parent.mkdir(parents=True, exist_ok=True)
         self.saver.save(self.session, str(save_path))
 
     def load_model(self, restore_path=None):
-        path =tf.train.latest_checkpoint(str(restore_path))
+        path = tf.train.latest_checkpoint(str(restore_path))
         self.saver.restore(self.session, path)
 
     def train_batch(self, batch_op):
@@ -119,7 +127,8 @@ class Model(object):
         return reduce_fn(results)
 
     def __predict_batch(self, batch_op):
-        (dialog_ids, turns, senders, turn_lengths, dialog_lengths) = self.session.run(batch_op)
+        (dialog_ids, turns, senders, turn_lengths,
+         dialog_lengths) = self.session.run(batch_op)
 
         feed_dict = {
             self.turns: turns,
@@ -153,8 +162,10 @@ def _sender_aware_encoding(inputs, senders):
     """
     with tf.name_scope("sender_aware_encoding"):
         inputs_repeat = tf.tile(inputs, [1, 1, 2])
-        mask_0 = tf.tile(tf.expand_dims(tf.logical_not(senders), -1), [1, 1, tf.shape(inputs)[-1]])
-        mask_1 = tf.tile(tf.expand_dims(senders, -1), [1, 1, tf.shape(inputs)[-1]])
+        mask_0 = tf.tile(tf.expand_dims(tf.logical_not(
+            senders), -1), [1, 1, tf.shape(inputs)[-1]])
+        mask_1 = tf.tile(tf.expand_dims(senders, -1),
+                         [1, 1, tf.shape(inputs)[-1]])
         mask = tf.concat([mask_0, mask_1], axis=-1)
         output = tf.where(mask, inputs_repeat, tf.zeros_like(inputs_repeat))
         return output
@@ -162,7 +173,7 @@ def _sender_aware_encoding(inputs, senders):
 
 def _rnn(inputs, seq_lengths, dropout, params):
     with tf.name_scope("rnn"):
-        cell_fn = lambda: rnn_cell.DropoutWrapper(
+        def cell_fn(): return rnn_cell.DropoutWrapper(
             params.cell(params.hidden_size),
             output_keep_prob=1 - dropout,
             variational_recurrent=True,
@@ -179,7 +190,8 @@ def _rnn(inputs, seq_lengths, dropout, params):
 
 
 def _encoder(inputs, senders, dialog_lengths, dropout, params):
-    inputs = _sender_aware_encoding(inputs, senders)  # [batch_num, dialog_len, (2 x embedding_size)]
+    # [batch_num, dialog_len, (2 x embedding_size)]
+    inputs = _sender_aware_encoding(inputs, senders)
     return _rnn(inputs, dialog_lengths, dropout, params)
 
 
@@ -198,7 +210,6 @@ def nugget_model_fn(features, dropout, params):
     turns, senders, utterance_lengths, dialog_lengths = features
     output = _encoder(turns, senders, dialog_lengths, dropout, params)
 
-
     # assume ordering is  [customer, helpdesk, customer, .....]
     max_time = tf.shape(output)[1]
     customer_index = tf.range(start=0, delta=2, limit=max_time)
@@ -207,11 +218,14 @@ def nugget_model_fn(features, dropout, params):
     customer_output = tf.gather(output, indices=customer_index, axis=1)
     helpdesk_output = tf.gather(output, indices=helpdesk_index, axis=1)
 
-    assert_op = tf.assert_equal(tf.shape(customer_output)[1] + tf.shape(helpdesk_output)[1], max_time)
+    assert_op = tf.assert_equal(tf.shape(customer_output)[
+                                1] + tf.shape(helpdesk_output)[1], max_time)
 
     with tf.control_dependencies([assert_op]):
-        customer_logits = tf.layers.dense(customer_output, len(data.CUSTOMER_NUGGET_TYPES_WITH_PAD))
-        helpdesk_logits = tf.layers.dense(helpdesk_output, len(data.HELPDESK_NUGGET_TYPES_WITH_PAD))
+        customer_logits = tf.layers.dense(
+            customer_output, len(data.CUSTOMER_NUGGET_TYPES_WITH_PAD))
+        helpdesk_logits = tf.layers.dense(
+            helpdesk_output, len(data.HELPDESK_NUGGET_TYPES_WITH_PAD))
 
     return customer_logits, helpdesk_logits
 
@@ -225,13 +239,15 @@ def nugget_loss(customer_logits, helpdesk_logits, customer_labels, helpdesk_labe
     customer_mask = tf.gather(mask, indices=customer_index, axis=1)
     helpdesk_mask = tf.gather(mask, indices=helpdesk_index, axis=1)
 
-    customer_loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=customer_logits, labels=customer_labels)
+    customer_loss = tf.nn.softmax_cross_entropy_with_logits_v2(
+        logits=customer_logits, labels=customer_labels)
     customer_loss = tf.reduce_sum(tf.where(customer_mask, customer_loss, tf.zeros_like(customer_loss))) \
-                    / tf.cast(tf.shape(customer_logits)[0], dtype=tf.float32)
+        / tf.cast(tf.shape(customer_logits)[0], dtype=tf.float32)
 
-    helpdesk_loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=helpdesk_logits, labels=helpdesk_labels)
+    helpdesk_loss = tf.nn.softmax_cross_entropy_with_logits_v2(
+        logits=helpdesk_logits, labels=helpdesk_labels)
     helpdesk_loss = tf.reduce_sum(tf.where(helpdesk_mask, helpdesk_loss, tf.zeros_like(helpdesk_loss))) \
-                    / tf.cast(tf.shape(helpdesk_logits)[0], dtype=tf.float32)
+        / tf.cast(tf.shape(helpdesk_logits)[0], dtype=tf.float32)
 
     return helpdesk_loss + customer_loss
 

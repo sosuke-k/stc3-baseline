@@ -49,7 +49,8 @@ class Vocab(object):
         if file_to_extract is None:
             self.pkl_file = self.download_file.with_suffix(".pkl")
         else:
-            self.pkl_file = (self.store_folder / file_to_extract).with_suffix(".pkl")
+            self.pkl_file = (self.store_folder /
+                             file_to_extract).with_suffix(".pkl")
 
         self._download_and_unzip(md5, file_to_extract)
         self._load_and_to_pickle()
@@ -93,10 +94,12 @@ class Vocab(object):
 
     def _download_and_unzip(self, md5=None, file_to_extract=None):
         if self.pkl_file.is_file():
-            self.logger.info("Found binary format embedding %s" % self.pkl_file)
+            self.logger.info("Found binary format embedding %s" %
+                             self.pkl_file)
             return
 
-        maybe_download(self.download_url, store_path=self.store_folder, filename=self.download_file.name, md5=md5)
+        maybe_download(self.download_url, store_path=self.store_folder,
+                       filename=self.download_file.name, md5=md5)
 
         if Path(self.download_url).suffix != ".zip":
             return
@@ -110,7 +113,8 @@ class Vocab(object):
                 unzipped_file_name = file_to_extract
 
             if not (self.store_folder / unzipped_file_name).is_file():
-                self.logger.info("Unzipping the embedding file %s" % self.download_file)
+                self.logger.info("Unzipping the embedding file %s" %
+                                 self.download_file)
                 zf.extract(member=unzipped_file_name, path=self.store_folder)
 
             self.download_file = self.store_folder / unzipped_file_name
@@ -118,10 +122,12 @@ class Vocab(object):
     def _load_and_to_pickle(self):
         if not self.pkl_file.is_file():
             try:
-                self.logger.info("Loading the downloaded embedding from %s" % self.download_file)
+                self.logger.info(
+                    "Loading the downloaded embedding from %s" % self.download_file)
                 self._wtoi, self._itow, self.weight = self._parse_embedding()
 
-                self.logger.info("Saving the embedding as a binary file to %s" % self.pkl_file)
+                self.logger.info(
+                    "Saving the embedding as a binary file to %s" % self.pkl_file)
                 dump([self._wtoi, self._itow, self.weight], self.pkl_file)
                 self.download_file.unlink()
             except MemoryError as e:
@@ -146,10 +152,12 @@ class Vocab(object):
 
 class Glove840B(Vocab):
     def __init__(self, store_folder, download_url=GLOVE_PATH, md5=GLOVE_MD5, tokenizer=None):
-        super().__init__(store_folder, download_url, md5, language=Language.english, tokenizer=tokenizer)
+        super().__init__(store_folder, download_url, md5,
+                         language=Language.english, tokenizer=tokenizer)
 
     def _parse_embedding(self):
-        df = pd.read_table(self.download_file, sep=" ", index_col=0, header=None, quoting=csv.QUOTE_NONE)
+        df = pd.read_table(self.download_file, sep=" ",
+                           index_col=0, header=None, quoting=csv.QUOTE_NONE)
         itow = list(df.index)
         wtoi = {w: i for i, w in enumerate(itow)}
         weights = df.as_matrix()
@@ -163,7 +171,8 @@ class Glove6B(Vocab):
                          language=Language.english, tokenizer=tokenizer, cased=False)
 
     def _parse_embedding(self):
-        df = pd.read_table(self.download_file, sep=" ", index_col=0, header=None, quoting=csv.QUOTE_NONE)
+        df = pd.read_table(self.download_file, sep=" ",
+                           index_col=0, header=None, quoting=csv.QUOTE_NONE)
         itow = list(df.index)
         wtoi = {w: i for i, w in enumerate(itow)}
         weights = df.as_matrix()
@@ -173,7 +182,8 @@ class Glove6B(Vocab):
 
 class Baidu(Vocab):
     def __init__(self, store_folder, download_url=BAIDU_PATH, md5=BAIDU_MD5, tokenizer=None):
-        super().__init__(store_folder, download_url, md5, language=Language.chinese, tokenizer=tokenizer)
+        super().__init__(store_folder, download_url, md5,
+                         language=Language.chinese, tokenizer=tokenizer)
 
     def _parse_embedding(self):
         return load(self.store_folder / self.pkl_file)

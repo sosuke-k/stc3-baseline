@@ -37,7 +37,8 @@ SHUFFLE_BUFFER_SIZE = 5000
 
 
 def parse_labels(annotations, senders):
-    customer_nuggets, helpdesk_nuggets = _parse_nugget_label(annotations, senders)
+    customer_nuggets, helpdesk_nuggets = _parse_nugget_label(
+        annotations, senders)
     return customer_nuggets, helpdesk_nuggets, _parse_quality_label(annotations)
 
 
@@ -45,7 +46,8 @@ def _parse_nugget_label(annotations, senders):
     customer_labels = []
     helpdesk_labels = []
     for i, nuggets in enumerate(zip(*(anno["nugget"] for anno in annotations))):
-        nugget_types = CUSTOMER_NUGGET_TYPES_WITH_PAD if senders[i] else HELPDESK_NUGGET_TYPES_WITH_PAD
+        nugget_types = CUSTOMER_NUGGET_TYPES_WITH_PAD if senders[
+            i] else HELPDESK_NUGGET_TYPES_WITH_PAD
         count = Counter(nuggets)
         distribution = []
         for nugget_type in nugget_types:
@@ -107,7 +109,8 @@ def process_raw_data(raw_data,
     logger = logging.getLogger(__name__)
 
     def data_pkl_name():
-        pkl_name = "_".join([name, vocab.__class__.__name__, vocab.tokenizer.__name__, str(max_len)]) + ".pkl"
+        pkl_name = "_".join([name, vocab.__class__.__name__,
+                             vocab.tokenizer.__name__, str(max_len)]) + ".pkl"
         return pkl_name
 
     def data_gen():
@@ -167,7 +170,8 @@ def process_raw_data(raw_data,
     else:
         logger.debug("Cache_dir was not set, processed data from scratch")
         data = [x for x in data_gen()]
-    logger.debug("Dataset size: %d, type: %s" % (len(data), "training" if is_train else "inference"))
+    logger.debug("Dataset size: %d, type: %s" %
+                 (len(data), "training" if is_train else "inference"))
     return data
 
 
@@ -187,15 +191,19 @@ def build_dataset_op(data, pad_idx, batch_size=32, is_train=True):
 
         dataset = dataset.padded_batch(
             batch_size=batch_size,
-            padded_shapes=(tf.TensorShape([]),
-                           tf.TensorShape([None, None]),
-                           tf.TensorShape([None]),
-                           tf.TensorShape([None]),
-                           tf.TensorShape([]),
-                           tf.TensorShape([None, len(CUSTOMER_NUGGET_TYPES_WITH_PAD)]),  # customer nugget label
-                           tf.TensorShape([None, len(HELPDESK_NUGGET_TYPES_WITH_PAD)]),  # helpdesk nugget label
-                           tf.TensorShape([len(QUALITY_MEASURES), len(QUALITY_SCALES)])  # quality label
-                           ),
+            padded_shapes=(
+                tf.TensorShape([]),
+                tf.TensorShape([None, None]),
+                tf.TensorShape([None]),
+                tf.TensorShape([None]),
+                tf.TensorShape([]),
+                # customer nugget label
+                tf.TensorShape([None, len(CUSTOMER_NUGGET_TYPES_WITH_PAD)]),
+                # helpdesk nugget label
+                tf.TensorShape([None, len(HELPDESK_NUGGET_TYPES_WITH_PAD)]),
+                # quality label
+                tf.TensorShape([len(QUALITY_MEASURES), len(QUALITY_SCALES)])
+            ),
 
             padding_values=("",
                             pad_idx,
@@ -248,7 +256,8 @@ def helpdesk_nugget_pred_to_dict(distribution):
 
 
 def nugget_prediction_to_submission_format(prediction):
-    dialog_id, (c_nugget_pred_list, h_nugget_pred_list), dialog_length = prediction
+    dialog_id, (c_nugget_pred_list,
+                h_nugget_pred_list), dialog_length = prediction
     nugget_list = []
     for c_nugget, h_nugget in itertools.zip_longest(c_nugget_pred_list, h_nugget_pred_list):
         if c_nugget is not None:
@@ -263,7 +272,7 @@ def nugget_prediction_to_submission_format(prediction):
     nugget_list = nugget_list[:dialog_length]
     assert len(nugget_list) == dialog_length
 
-    submission_format  = {
+    submission_format = {
         "id": dialog_id.decode("utf-8"),
         "nugget": nugget_list
     }

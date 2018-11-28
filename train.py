@@ -22,7 +22,8 @@ def flags2params(flags, customized_params=None):
     if customized_params:
         flags.__dict__.update(customized_params)
 
-    flags.checkpoint_dir = Path(flags.checkpoint_dir) / flags.language / flags.task
+    flags.checkpoint_dir = Path(
+        flags.checkpoint_dir) / flags.language / flags.task
     flags.output_dir.mkdir(parents=True, exist_ok=True)
 
     flags.language = vocab.Language[flags.language]
@@ -36,6 +37,7 @@ def flags2params(flags, customized_params=None):
     flags.cell = getattr(tf.nn.rnn_cell, flags.cell)
 
     return flags
+
 
 class TrainingHelper(object):
     def __init__(self, customized_params=None, log_to_tensorboard=True):
@@ -52,10 +54,9 @@ class TrainingHelper(object):
             params.tag, self.task.name, self.language.name,
             datetime.datetime.now().strftime('%b-%d_%H-%M-%S-%f'))
         assert not (params.log_dir / self.run_name).is_dir(), "The run %s has existed in Log Path %s" % (
-        self.run_name, params.log_dir)
+            self.run_name, params.log_dir)
         self.checkpoint_dir = params.checkpoint_dir / self.run_name / "model"
         self.output_dir = params.output_dir
-
 
         # Loading dataset
         train_path, test_path, vocab = prepare_data_and_vocab(
@@ -96,11 +97,14 @@ class TrainingHelper(object):
             name="test_%s" % params.language)
 
         pad_idx = vocab.pad_idx
-        self.train_iterator = build_dataset_op(train_dataset, pad_idx, params.batch_size, is_train=True)
+        self.train_iterator = build_dataset_op(
+            train_dataset, pad_idx, params.batch_size, is_train=True)
         self.train_batch = self.train_iterator.get_next()
-        self.dev_iterator = build_dataset_op(dev_dataset, pad_idx, params.batch_size, is_train=False)
+        self.dev_iterator = build_dataset_op(
+            dev_dataset, pad_idx, params.batch_size, is_train=False)
         self.dev_batch = self.dev_iterator.get_next()
-        self.test_iterator = build_dataset_op(test_dataset, pad_idx, params.batch_size, is_train=False)
+        self.test_iterator = build_dataset_op(
+            test_dataset, pad_idx, params.batch_size, is_train=False)
         self.test_batch = self.test_iterator.get_next()
 
         config = tf.ConfigProto(allow_soft_placement=True)
@@ -135,9 +139,10 @@ class TrainingHelper(object):
             start = time.time()
             train_loss = self.train_epoch()
             used_time = time.time() - start
-            self.logger.info("%d Epoch, training loss = %.4f, used %.2f sec" % (epoch + 1, train_loss, used_time))
+            self.logger.info("%d Epoch, training loss = %.4f, used %.2f sec" % (
+                epoch + 1, train_loss, used_time))
             metrics = self.evaluate_on_dev()
-            self.logger.info("  Dev Metrics: %s" %metrics[self.task.name])
+            self.logger.info("  Dev Metrics: %s" % metrics[self.task.name])
             if self.log_to_tensorboard:
                 self.write_to_summary(metrics, epoch)
 
@@ -146,27 +151,34 @@ class TrainingHelper(object):
         if metrics["quality"] is not None:
             for distance_type, distance in metrics["quality"].items():
                 for score_type, score in distance.items():
-                    summary.value.add(tag="quality_dev_%s/%s_score" % (distance_type, score_type), simple_value=score)
+                    summary.value.add(tag="quality_dev_%s/%s_score" %
+                                      (distance_type, score_type), simple_value=score)
 
         if metrics["nugget"] is not None:
             for distance_type, distance in metrics["nugget"].items():
-                summary.value.add(tag="nugget_dev_%s/" % (distance_type), simple_value=distance)
+                summary.value.add(tag="nugget_dev_%s/" %
+                                  (distance_type), simple_value=distance)
 
-        self.log_writer.add_run_metadata(self.model.run_metadata, "meta_%s" % global_step, global_step=global_step)
+        self.log_writer.add_run_metadata(
+            self.model.run_metadata, "meta_%s" % global_step, global_step=global_step)
         self.log_writer.add_summary(summary, global_step=global_step)
 
     def evaluate_on_dev(self):
-        predictions = self.model.predict(self.dev_iterator.initializer, self.dev_batch)
+        predictions = self.model.predict(
+            self.dev_iterator.initializer, self.dev_batch)
         submission = self.__predictions_to_submission_format(predictions)
         scores = evaluate_from_list(submission, self.raw_dev)
         return scores
 
     def predict_test(self, write_to_file=True):
-        predictions = self.model.predict(self.test_iterator.initializer, self.test_batch)
+        predictions = self.model.predict(
+            self.test_iterator.initializer, self.test_batch)
         submission = self.__predictions_to_submission_format(predictions)
 
         if write_to_file:
-            output_file = trainer.output_dir / ("%s_%s_test_submission.json" % (self.task.name, self.language.name))
+            output_file = trainer.output_dir / \
+                ("%s_%s_test_submission.json" %
+                 (self.task.name, self.language.name))
             output_file.parent.mkdir(parents=True, exist_ok=True)
             json.dump(submission, output_file.open("w"))
 
@@ -176,16 +188,15 @@ class TrainingHelper(object):
         submission = []
         for pred in predictions:
             if self.task == Task.nugget:
-                submission.append(data.nugget_prediction_to_submission_format(pred))
+                submission.append(
+                    data.nugget_prediction_to_submission_format(pred))
             elif self.task == Task.quality:
-                submission.append(data.quality_prediction_to_submission_format(pred))
+                submission.append(
+                    data.quality_prediction_to_submission_format(pred))
         return submission
 
     def metrics_to_single_value(self, metrics):
         pass
-
-
-
 
 
 def prepare_data_and_vocab(vocab, store_folder, data_dir, language=Language.english, tokenizer=None):
