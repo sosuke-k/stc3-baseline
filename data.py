@@ -153,6 +153,7 @@ def process_raw_data(raw_data,
                        dialogue_length)
 
     if cache_dir:
+        cache_dir.mkdir(parents=True, exist_ok=True)
         pkl_data = cache_dir / data_pkl_name()
 
         if not pkl_data.is_file():
