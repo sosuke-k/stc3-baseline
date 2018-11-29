@@ -10,10 +10,16 @@ from sklearn import model_selection
 import data
 import model
 import vocab
-from data import process_raw_data, build_dataset_op, Task
+from data import process_raw_data, build_dataset_op, Task, QUALITY_MEASURES
 from flags import define_flags
+import stc3dataset.data.eval  # to use evaluate_nugget, evaluate_quality functions
 from stc3dataset.data.eval import evaluate_from_list
 from vocab import Language
+from writer import Writer
+
+MEASURES = {t: list(getattr(stc3dataset.data.eval, "evaluate_%s" % t)({}, {}).keys())
+            for t in Task.__members__.keys()}
+
 
 PROJECT_DIR = Path(__file__).parent.parent
 
@@ -135,6 +141,24 @@ class TrainingHelper(object):
         return train_loss
 
     def train(self, num_epoch=None):
+        score_dir = PROJECT_DIR / "scores"
+        score_dir.mkdir(parents=True, exist_ok=True)
+        score_name = "scores_%s.tsv" % self.run_name
+        score_path = score_dir / score_name
+        writer = Writer(score_path)
+
+        if self.task == Task.nugget:
+            metric_list = MEASURES["nugget"]  # ["jsd", "rnss"]
+            raise Exception("not yet")
+        if self.task == Task.quality:
+            metric_list = MEASURES["quality"]  # ["rsnod", "nmd"]
+            score_types = list(QUALITY_MEASURES)  # ["A", "E", "S"]
+            columns = ["%s_%s" % (metric, stype)
+                       for metric in metric_list for stype in score_types]
+
+        columns = ["global_step", "train_loss"] + columns
+        writer.write(columns)
+
         for epoch in range(num_epoch or self.num_epoch):
             start = time.time()
             train_loss = self.train_epoch()
@@ -145,6 +169,14 @@ class TrainingHelper(object):
             self.logger.info("  Dev Metrics: %s" % metrics[self.task.name])
             if self.log_to_tensorboard:
                 self.write_to_summary(metrics, epoch)
+
+            if self.task == Task.nugget:
+                raise Exception("not yet")
+            if self.task == Task.quality:
+                values = [metrics["quality"][metric][stype]
+                          for metric in metric_list for stype in score_types]
+            values = [self.model.global_step, train_loss] + values
+            writer.write(values)
 
     def write_to_summary(self, metrics, global_step):
         summary = tf.Summary()
@@ -213,8 +245,13 @@ def prepare_data_and_vocab(vocab, store_folder, data_dir, language=Language.engl
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG,
+                        filename="train.log",
+                        filemode="a",
+                        format="%(asctime)s\t%(levelname)s\t%(message)s")
+    logging.info("Start main function in train.py")
     trainer = TrainingHelper()
     if not trainer.inference_mode:
         trainer.train()
     test_prediction = trainer.predict_test()
+    logging.info("Finished main function in train.py")
