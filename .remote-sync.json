@@ -1,0 +1,22 @@
+{
+  "logger": {
+    "title": "Remote Sync"
+  },
+  "uploadOnSave": true,
+  "useAtomicWrites": false,
+  "deleteLocal": false,
+  "hostname": "values.graphics",
+  "port": "2224",
+  "target": "/home/skato/Dropbox/ghq/github.com/sosuke-k/stc3-baseline",
+  "ignore": [
+    ".remote-sync.json",
+    ".git/**",
+    ".DS_Store",
+    "__pycahche__"
+  ],
+  "username": "skato",
+  "keyfile": "Users/skato/.ssh/id_rsa",
+  "passphrase": "",
+  "watch": [],
+  "transport": "scp"
+}
