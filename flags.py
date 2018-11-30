@@ -59,6 +59,9 @@ def __define_model(parser):
     parser.add_argument("--hidden-size", type=int, default=150)
     parser.add_argument("--num-layers", type=int, default=3)
     parser.add_argument("--cell", type=str, default="LSTMCell")
+    parser.add_argument("--model", type=str, default="Model")
+    parser.add_argument("--alpha", type=float, default=0.5)
+    parser.add_argument("--is-train", type=bool, default=True)
 
 
 def __define_preprocessing(parser):

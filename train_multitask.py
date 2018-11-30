@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import time
+from enum import unique, Enum
 
 import tensorflow as tf
 from pathlib2 import Path
@@ -24,6 +25,11 @@ MEASURES = {t: list(getattr(stc3dataset.data.eval, "evaluate_%s" % t)({}, {}).ke
 PROJECT_DIR = Path(__file__).parent.parent
 
 
+@unique
+class MultiTask(Enum):
+    multi = 2
+
+
 def flags2params(flags, customized_params=None):
     if customized_params:
         flags.__dict__.update(customized_params)
@@ -33,7 +39,8 @@ def flags2params(flags, customized_params=None):
     flags.output_dir.mkdir(parents=True, exist_ok=True)
 
     flags.language = vocab.Language[flags.language]
-    flags.task = data.Task[flags.task]
+    # flags.task = data.Task[flags.task]
+    flags.task = MultiTask[flags.task]
     if flags.language == Language.english:
         flags.vocab = getattr(vocab, flags.english_vocab)
     else:
@@ -118,7 +125,7 @@ class TrainingHelper(object):
         config = tf.ConfigProto(allow_soft_placement=True)
         sess = tf.Session(config=config)
 
-        self.model = params.model(
+        self.model = model.AMTLModel(
             vocab.weight, self.task, params, session=sess, max_to_keep=params.num_epoch)
         self.inference_mode = False
         self.num_epoch = params.num_epoch
@@ -150,16 +157,13 @@ class TrainingHelper(object):
         score_path = score_dir / score_name
         writer = Writer(score_path)
 
-        if self.task == Task.nugget:
-            metric_list = MEASURES["nugget"]  # ["jsd", "rnss"]
-            columns = metric_list
-        if self.task == Task.quality:
-            metric_list = MEASURES["quality"]  # ["rsnod", "nmd"]
-            score_types = list(QUALITY_MEASURES)  # ["A", "E", "S"]
-            columns = ["%s_%s" % (metric, stype)
-                       for metric in metric_list for stype in score_types]
+        nugget_metric_list = MEASURES["nugget"]  # ["jsd", "rnss"]
+        quality_metric_list = MEASURES["quality"]  # ["rsnod", "nmd"]
+        score_types = list(QUALITY_MEASURES)  # ["A", "E", "S"]
+        columns = ["%s_%s" % (metric, stype)
+                   for metric in quality_metric_list for stype in score_types]
 
-        columns = ["global_step", "train_loss"] + columns
+        columns = ["global_step", "train_loss"] + columns + nugget_metric_list
         writer.write(columns)
 
         for epoch in range(num_epoch or self.num_epoch):
@@ -169,17 +173,14 @@ class TrainingHelper(object):
             self.logger.info("%d Epoch, training loss = %.4f, used %.2f sec" % (
                 epoch + 1, train_loss, used_time))
             metrics = self.evaluate_on_dev()
-            self.logger.info("  Dev Metrics: %s" % metrics[self.task.name])
+            self.logger.info("  Dev Metrics: %s" % metrics)
             if self.log_to_tensorboard:
                 self.write_to_summary(metrics, epoch)
 
-            if self.task == Task.nugget:
-                values = [metrics["nugget"][metric]
-                          for metric in metric_list]
-            if self.task == Task.quality:
-                values = [metrics["quality"][metric][stype]
-                          for metric in metric_list for stype in score_types]
-            values = [self.model.global_step, train_loss] + values
+            values = [metrics["quality"][metric][stype]
+                      for metric in quality_metric_list for stype in score_types]
+            values = [self.model.global_step, train_loss] + values \
+                + [metrics["nugget"][metric] for metric in nugget_metric_list]
             writer.write(values)
 
     def write_to_summary(self, metrics, global_step):
@@ -200,11 +201,23 @@ class TrainingHelper(object):
         self.log_writer.add_summary(summary, global_step=global_step)
 
     def evaluate_on_dev(self):
+        # predict for quality task
+        self.task = Task.quality
+        self.model.prediction = self.model.quality_prediction
         predictions = self.model.predict(
             self.dev_iterator.initializer, self.dev_batch)
-        submission = self.__predictions_to_submission_format(predictions)
-        scores = evaluate_from_list(submission, self.raw_dev)
-        return scores
+        q_submission = self.__predictions_to_submission_format(predictions)
+        q_scores = evaluate_from_list(q_submission, self.raw_dev)
+
+        # predict for nugget task
+        self.task = Task.nugget
+        self.model.prediction = self.model.nugget_prediction
+        predictions = self.model.predict(
+            self.dev_iterator.initializer, self.dev_batch)
+        n_submission = self.__predictions_to_submission_format(predictions)
+        n_scores = evaluate_from_list(n_submission, self.raw_dev)
+
+        return {"quality": q_scores["quality"], "nugget": n_scores["nugget"]}
 
     def predict_test(self, write_to_file=True):
         predictions = self.model.predict(
