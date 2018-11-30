@@ -332,7 +332,7 @@ class DiffBinModel(Model):
                                        lr=params.learning_rate, optimizer=params.optimizer)
 
 
-class AMTLModel(Model):
+class MultiModel(Model):
 
     def _set_operations(self, embedding, task, params):
         self.is_train = params.is_train

@@ -128,7 +128,7 @@ class TrainingHelper(object):
         config = tf.ConfigProto(allow_soft_placement=True)
         sess = tf.Session(config=config)
 
-        self.model = model.AMTLModel(
+        self.model = model.MultiModel(
             vocab.weight, self.task, params, session=sess, max_to_keep=params.num_epoch)
         self.inference_mode = False
         self.num_epoch = params.num_epoch
