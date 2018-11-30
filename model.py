@@ -345,10 +345,6 @@ class AMTLModel(Model):
             turns_embedded, axis=2, name="BoW")  # Bag of Words
 
         inputs = _sender_aware_encoding(turns_boW, self.senders)
-        # quality_output = _rnn(inputs, self.dialogue_lengths,
-        #                       self.dropout, params, name_scope="quality_rnn")
-        # nugget_output = _rnn(inputs, self.dialogue_lengths,
-        #                      self.dropout, params, name_scope="nugget_rnn")
 
         with tf.name_scope("shared_rnn"):
             def cell_fn(): return rnn_cell.DropoutWrapper(
@@ -368,14 +364,7 @@ class AMTLModel(Model):
                 sequence_length=self.dialogue_lengths,
                 dtype=tf.float32)
 
-        # quality_shared_repr = tf.concat(
-        #     [quality_output, shared_output], axis=2)
-        # nugget_shared_repr = tf.concat([nugget_output, shared_output], axis=2)
-
-        # self.shared_dense = tf.layers.Dense(units=2, activation=None)
-
         # Quality task loss
-        # quality_dialogue_repr = tf.reduce_sum(quality_shared_repr, axis=1)
         quality_dialogue_repr = tf.reduce_sum(shared_output, axis=1)
         quality_logits = []
         for _ in data.QUALITY_MEASURES:
@@ -427,59 +416,13 @@ class AMTLModel(Model):
                                   tf.nn.softmax(self.h_nuggets_logits, axis=-1))
 
         # Train operations
-        # shared_dialogue_repr = tf.reduce_sum(shared_output, axis=1)
-        # nugget_dialogue_repr = tf.reduce_sum(nugget_shared_repr, axis=1)
-        # loss_diff = self.diff_loss(nugget_dialogue_repr, quality_dialogue_repr)
         self.loss = []
         self.train_op = []
         for task in ["quality", "nugget"]:
-            # loss_adv, loss_adv_l2 = self.adversarial_loss(
-            #     shared_dialogue_repr, Task[task].value, self.dropout)
-            # task_loss = getattr(self,  "%s_loss" % task) + \
-            #     0.05 * loss_adv + loss_diff
             task_loss = getattr(self,  "%s_loss" % task)
             self.loss.append(task_loss)
             self.train_op.append(build_train_op(task_loss, tf.train.get_or_create_global_step(),
                                                 lr=params.learning_rate, optimizer=params.optimizer))
-
-        # Prections
-        # self.prediction = self.quality_prediction + self.nugget_prediction
-
-    def diff_loss(self, shared_feat, task_feat):
-        task_feat -= tf.reduce_mean(task_feat, 0)
-        shared_feat -= tf.reduce_mean(shared_feat, 0)
-
-        task_feat = tf.nn.l2_normalize(task_feat, 1)
-        shared_feat = tf.nn.l2_normalize(shared_feat, 1)
-
-        correlation_matrix = tf.matmul(
-            task_feat, shared_feat, transpose_a=True)
-
-        cost = tf.reduce_mean(tf.square(correlation_matrix)) * 0.01
-        cost = tf.where(cost > 0, cost, 0, name='value')
-
-        assert_op = tf.Assert(tf.is_finite(cost), [cost])
-        with tf.control_dependencies([assert_op]):
-            loss_diff = tf.identity(cost)
-
-        return loss_diff
-
-    def adversarial_loss(self, repr, task_label, dropout, is_train=True):
-        repr = flip_gradient(repr)
-        if self.is_train:
-            repr = tf.nn.dropout(repr, dropout)
-
-        # shared_dense = tf.layers.Dense(units=2, activation=None)
-        shared_logits = self.shared_dense(inputs=repr)
-        shared_dense_l2 = tf.nn.l2_loss(self.shared_dense.weights[0]) \
-            + tf.nn.l2_loss(self.shared_dense.weights[1])
-        # import ipdb
-        # ipdb.set_trace()
-        label = tf.one_hot(task_label, 2)
-        loss_adv = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=shared_logits))
-
-        return loss_adv, shared_dense_l2
 
     def train_batch(self, batch_op):
         (_, turns, senders, turn_lengths, dialog_lengths,
@@ -503,27 +446,3 @@ class AMTLModel(Model):
         )
 
         return qloss, nloss
-
-
-class FlipGradientBuilder(object):
-    '''Gradient Reversal Layer from https://github.com/pumpikano/tf-dann'''
-
-    def __init__(self):
-        self.num_calls = 0
-
-    def __call__(self, x, l=1.0):
-        grad_name = "FlipGradient%d" % self.num_calls
-
-        @ops.RegisterGradient(grad_name)
-        def _flip_gradients(op, grad):
-            return [tf.negative(grad) * l]
-
-        g = tf.get_default_graph()
-        with g.gradient_override_map({"Identity": grad_name}):
-            y = tf.identity(x)
-
-        self.num_calls += 1
-        return y
-
-
-flip_gradient = FlipGradientBuilder()

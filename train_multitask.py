@@ -51,7 +51,8 @@ def flags2params(flags, customized_params=None):
 
     flags.model = getattr(model, flags.model)
 
-    flags.resume_dir = Path(flags.resume_dir)
+    if flags.resume_dir:
+        flags.resume_dir = Path(flags.resume_dir)
 
     return flags
 
@@ -300,5 +301,8 @@ if __name__ == '__main__':
         logging.info("Training Starts")
         trainer.train()
         logging.info("Training Done")
-    test_prediction = trainer.predict_test()
+    if trainer.inference_mode:
+        logging.info("Prediction Starts")
+        test_prediction = trainer.predict_test()
+        logging.info("Prediction Done")
     logging.info("Finished main function in train.py")
