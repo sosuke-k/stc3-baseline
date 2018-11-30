@@ -96,7 +96,8 @@ class Model(object):
             path = tf.train.latest_checkpoint(str(restore_path))
             self.saver.restore(self.session, path)
         else:
-            self.saver.restore(self.session, path, global_step=global_step)
+            path = restore_path / ("model-%d" % global_step)
+            self.saver.restore(self.session, str(path))
 
     def train_batch(self, batch_op):
         (_, turns, senders, turn_lengths, dialog_lengths,

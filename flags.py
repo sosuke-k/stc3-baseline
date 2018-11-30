@@ -34,6 +34,7 @@ def __define_base(parser):
                         default=PROJECT_DIR / "checkpoint")
     parser.add_argument("--infer-test", type=bool, default=False)
     parser.add_argument("--resume-dir", type=str, default=None)
+    parser.add_argument("--global-step", type=int, default=None)
     parser.add_argument("--tag", type=str, default="baseline")
 
 

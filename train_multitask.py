@@ -51,6 +51,8 @@ def flags2params(flags, customized_params=None):
 
     flags.model = getattr(model, flags.model)
 
+    flags.resume_dir = Path(flags.resume_dir)
+
     return flags
 
 
@@ -131,7 +133,10 @@ class TrainingHelper(object):
         self.num_epoch = params.num_epoch
 
         if params.resume_dir:
-            self.model.load_model(params.resume_dir)
+            self.output_dir = self.output_dir / \
+                str(params.resume_dir).split("/")[-1] / str(params.global_step)
+            self.model.load_model(
+                params.resume_dir, global_step=params.global_step)
             if params.infer_test:
                 self.inference_mode = True
             self.logger.info("Inference_mode: On")
@@ -220,18 +225,41 @@ class TrainingHelper(object):
         return {"quality": q_scores["quality"], "nugget": n_scores["nugget"]}
 
     def predict_test(self, write_to_file=True):
-        predictions = self.model.predict(
+        # predict for quality task
+        self.task = Task.quality
+        self.model.prediction = self.model.quality_prediction
+        quality_predictions = self.model.predict(
             self.test_iterator.initializer, self.test_batch)
-        submission = self.__predictions_to_submission_format(predictions)
+        quality_submission = self.__predictions_to_submission_format(
+            quality_predictions)
 
         if write_to_file:
             output_file = trainer.output_dir / \
                 ("%s_%s_test_submission.json" %
                  (self.task.name, self.language.name))
             output_file.parent.mkdir(parents=True, exist_ok=True)
-            json.dump(submission, output_file.open("w"))
+            self.logger.info("Saving to %s" % output_file)
+            json.dump(quality_submission, output_file.open("w"))
+            self.logger.info("Saved to %s" % output_file)
 
-        return submission
+        # predict for nugget task
+        self.task = Task.nugget
+        self.model.prediction = self.model.nugget_prediction
+        nugget_predictions = self.model.predict(
+            self.test_iterator.initializer, self.test_batch)
+        nugget_submission = self.__predictions_to_submission_format(
+            nugget_predictions)
+
+        if write_to_file:
+            output_file = trainer.output_dir / \
+                ("%s_%s_test_submission.json" %
+                 (self.task.name, self.language.name))
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            self.logger.info("Saving to %s" % output_file)
+            json.dump(nugget_submission, output_file.open("w"))
+            self.logger.info("Saved to %s" % output_file)
+
+        return quality_submission, nugget_submission
 
     def __predictions_to_submission_format(self, predictions):
         submission = []
